@@ -1,0 +1,239 @@
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Index')
+      .setTitle('Sistem Disposisi Surat')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+// ================= FUNGSI LOGIN & SIMPAN (YANG LAMA) =================
+function cekLogin(username, password) {
+  var sheet = SpreadsheetApp.openById("[ID_SPREADSHEET_ANDA]").getSheetByName("DataUser");
+  var data = sheet.getDataRange().getValues();
+  
+  for (var i = 1; i < data.length; i++) {
+    // Membaca Kolom A (Username), B (Password), C (Nama), D (Level)
+    if (data[i][0] == username && data[i][1] == password) {
+      return { 
+        success: true, 
+        nama: data[i][2], 
+        level: data[i][3].toString().toLowerCase() // Mengambil data level (admin/user)
+      };
+    }
+  }
+  return { success: false, message: "Username atau Password salah" };
+}
+
+function simpanData(data) {
+  try {
+    var fileUrl = "Tidak ada file";
+    if (data.fileSurat && data.namaFile) {
+      var folder = DriveApp.getFolderById("[ID_FOLDER_DRIVE_ANDA]"); 
+      var contentType = data.fileSurat.substring(5, data.fileSurat.indexOf(';'));
+      var bytes = Utilities.base64Decode(data.fileSurat.split(',')[1]);
+      var blob = Utilities.newBlob(bytes, contentType, data.namaFile);
+      var file = folder.createFile(blob);
+      fileUrl = file.getUrl(); 
+    }
+
+    var sheet = SpreadsheetApp.openById("[ID_SPREADSHEET_ANDA]").getSheetByName("DataDisposisi");
+    sheet.appendRow([
+      new Date(), data.noSurat, data.pengirim, data.perihal, 
+      data.disposisiKe, data.catatan, data.ttd, data.petugas, fileUrl
+    ]);
+    return "Disposisi & File berhasil disimpan!";
+  } catch (error) {
+    throw new Error(error.toString());
+  }
+}
+
+// ================= FUNGSI BARU UNTUK DASHBOARD & PENCARIAN =================
+
+// Mengambil surat yang didisposisikan ke user yang sedang login
+function getSuratMasuk(namaPetugas) {
+  var sheet = SpreadsheetApp.openById("[ID_SPREADSHEET_ANDA]").getSheetByName("DataDisposisi");
+  var data = sheet.getDataRange().getValues();
+  var result = [];
+
+  for (var i = 1; i < data.length; i++) {
+    var disposisiKe = data[i][4] ? data[i][4].toString().toLowerCase() : "";
+    var namaTarget = namaPetugas.toLowerCase();
+    
+    if (disposisiKe.includes(namaTarget)) {
+      result.push({
+        row: i + 1, // Mengambil nomor baris di Google Sheets (i=1 artinya baris 2)
+        tanggal: Utilities.formatDate(new Date(data[i][0]), "GMT+8", "dd/MM/yyyy HH:mm"),
+        noSurat: data[i][1],
+        pengirim: data[i][2],
+        perihal: data[i][3],
+        catatan: data[i][5],
+        fileUrl: data[i][8] || "#",
+        komentarPenerima: data[i][9] || "" // Mengambil data dari Kolom J (Komentar Penerima)
+      });
+    }
+  }
+  return result.reverse(); 
+}
+
+// Mencari surat berdasarkan kata kunci
+function cariSurat(keyword) {
+  var sheet = SpreadsheetApp.openById("[ID_SPREADSHEET_ANDA]").getSheetByName("DataDisposisi");
+  var data = sheet.getDataRange().getValues();
+  var result = [];
+  var key = keyword.toLowerCase();
+
+  for(var i=1; i<data.length; i++){
+    var baris = data[i];
+    var gabunganText = baris.join(" ").toLowerCase(); // Gabungkan semua teks di baris itu
+    
+    if(gabunganText.includes(key)){
+      result.push({
+        tanggal: Utilities.formatDate(new Date(baris[0]), "GMT+8", "dd/MM/yyyy"),
+        noSurat: baris[1],
+        perihal: baris[3],
+        disposisiKe: baris[4],
+        fileUrl: baris[8] || "#"
+      });
+    }
+  }
+  return result;
+}
+
+// ================= FUNGSI AMBIL DAFTAR USER =================
+function getListPetugas() {
+  // JANGAN LUPA MASUKKAN ID SPREADSHEET IBU DI SINI
+  var sheet = SpreadsheetApp.openById("[ID_SPREADSHEET_ANDA]").getSheetByName("DataUser");
+  var data = sheet.getDataRange().getValues();
+  var listNama = [];
+  
+  // Looping dari baris ke-2 (melewati header)
+  for (var i = 1; i < data.length; i++) {
+    // Mengecek kolom ke-3 (index 2) yaitu "Nama Lengkap"
+    if (data[i][2]) { 
+      listNama.push(data[i][2]);
+    }
+  }
+  return listNama; // Mengirimkan array/daftar nama ke tampilan
+}
+
+// Fungsi baru untuk menyimpan komentar penerima
+function simpanKomentar(row, komentar) {
+  var sheet = SpreadsheetApp.openById("[ID_SPREADSHEET_ANDA]").getSheetByName("DataDisposisi");
+  // Menyimpan teks komentar ke Kolom ke-10 (Kolom J) pada baris yang sesuai
+  sheet.getRange(row, 10).setValue(komentar);
+  return "Komentar berhasil ditambahkan!";
+}
+
+// ================= FUNGSI SURAT TERKIRIM =================
+// Mengambil daftar surat yang dikirim/dibuat oleh user yang sedang login
+function getSuratTerkirim(namaPetugas) {
+  var sheet = SpreadsheetApp.openById("[ID_SPREADSHEET_ANDA]").getSheetByName("DataDisposisi");
+  var data = sheet.getDataRange().getValues();
+  var result = [];
+
+  for (var i = 1; i < data.length; i++) {
+    // Kolom ke-8 (index 7) adalah Petugas/Pembuat surat
+    var petugasPembuat = data[i][7] ? data[i][7].toString().toLowerCase() : "";
+    var namaTarget = namaPetugas.toLowerCase();
+    
+    // Jika nama petugas yang login cocok dengan nama pembuat surat
+    if (petugasPembuat.includes(namaTarget)) {
+      result.push({
+        tanggal: Utilities.formatDate(new Date(data[i][0]), "GMT+8", "dd/MM/yyyy HH:mm"),
+        noSurat: data[i][1],
+        perihal: data[i][3],
+        disposisiKe: data[i][4], // Target penerima
+        fileUrl: data[i][8] || "#",
+        komentar: data[i][9] || "" // Menarik komentar balasan
+      });
+    }
+  }
+  return result.reverse(); // Urutkan dari yang paling baru
+}
+
+// ================= FUNGSI BUAT SURAT TUGAS OTOMATIS =================
+function generateSuratTugas(data) {
+  try {
+    // 1. ID DOKUMEN TEMPLATE GOOGLE DOCS 
+    var TEMPLATE_ID = "[ID_TEMPLATE_DOCS_ANDA]"; 
+    
+    // 2. ID FOLDER DRIVE UNTUK MENYIMPAN HASIL SURATNYA
+    var FOLDER_ID = "[ID_FOLDER_DRIVE_ANDA]"; 
+    
+    var folder = DriveApp.getFolderById(FOLDER_ID);
+    var templateFile = DriveApp.getFileById(TEMPLATE_ID);
+    
+    // Membuat salinan dari template
+    var namaFileBaru = "Surat Tugas - " + data.nama;
+    var newFile = templateFile.makeCopy(namaFileBaru, folder);
+    
+    // Membuka file salinan untuk diedit isinya
+    var doc = DocumentApp.openById(newFile.getId());
+    var body = doc.getBody();
+    
+    // Mengganti teks placeholder dengan data dari form
+    body.replaceText("<<NOMOR>>", data.nomor);
+    body.replaceText("<<NAMA>>", data.nama);
+    body.replaceText("<<NIDN>>", data.nidn);
+    body.replaceText("<<JABATAN>>", data.jabatan);
+    body.replaceText("<<TUJUAN>>", data.tujuan);
+    body.replaceText("<<HARI>>", data.hari);
+    body.replaceText("<<TANGGAL>>", data.tanggal);
+    body.replaceText("<<MAKSUD>>", data.maksud);
+    
+    // Menyimpan dan menutup dokumen
+    doc.saveAndClose();
+    
+    // Mengambil link dokumen yang sudah jadi
+    var linkDokumen = newFile.getUrl();
+    
+    // =========================================================
+    // LOGIKA BARU: PEMBATASAN HAK AKSES BERDASARKAN LEVEL
+    // =========================================================
+  if (data.level === "admin") {
+      // Jika Admin: Bebas buka dan cetak dokumen
+      return { success: true, url: linkDokumen, isAdmin: true };
+      
+    } else {
+      // Jika User Biasa: Jadikan Draft & Kirim ke SEMUA Admin
+      
+      var ID_SPREADSHEET = "[ID_SPREADSHEET_ANDA]"; 
+      var ss = SpreadsheetApp.openById(ID_SPREADSHEET);
+      
+      var sheetDisposisi = ss.getSheetByName("DataDisposisi");
+      var sheetUser = ss.getSheetByName("DataUser");
+      
+      // --- LOGIKA MENCARI SEMUA ADMIN ---
+      var dataUser = sheetUser.getDataRange().getValues();
+      var kumpulanAdmin = [];
+      
+      for (var i = 1; i < dataUser.length; i++) {
+        // Cek kolom ke-4 (indeks 3) untuk level "admin"
+        if (dataUser[i][3] && dataUser[i][3].toString().toLowerCase() === "admin") {
+          kumpulanAdmin.push(dataUser[i][2]); // Menyimpan Nama Lengkap si admin
+        }
+      }
+      
+      // Gabungkan semua nama admin menjadi satu teks (misal: "ITgusputra, Admin Dua, Admin Tiga")
+      var targetAdmin = kumpulanAdmin.join(", "); 
+      // ----------------------------------
+
+      var waktu = new Date();
+      var pengirim = data.pembuat; // Nama staf yang mengisi form
+      var perihal = "Draft Surat Tugas: " + data.nama;
+      var catatan = "Mohon direview dan dicetak Surat Tugas untuk Bapak/Ibu " + data.nama;
+      
+      // Memasukkan data otomatis ke tabel DataDisposisi
+      sheetDisposisi.appendRow([
+        waktu, data.nomor, pengirim, perihal, targetAdmin, catatan, "", "", linkDokumen, ""
+      ]);
+      
+      return { 
+        success: true, 
+        isAdmin: false, 
+        message: "Draft surat tugas berhasil dibuat dan telah dikirim ke Direktur dan seluruh Admin Surat untuk direview/dicetak." 
+      };
+    }
+    
+  } catch (error) {
+    return { success: false, message: error.toString() };
+  }
+}
