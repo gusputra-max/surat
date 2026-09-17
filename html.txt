@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f9; }
+      .container { max-width: 800px; margin: 20px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+      
+      /* --- NAVBAR STYLES --- */
+      .navbar { background-color: #0056b3; overflow: hidden; display: none; border-radius: 8px 8px 0 0; }
+      .navbar button { float: left; display: block; color: white; text-align: center; padding: 14px 16px; text-decoration: none; border: none; background: none; cursor: pointer; font-size: 16px; font-weight: bold; }
+      .navbar button:hover { background-color: #004494; }
+      .navbar button.active { background-color: #003366; }
+      .navbar .right { float: right; background-color: #dc3545; }
+      .navbar .right:hover { background-color: #a71d2a; }
+
+      /* --- FORM STYLES --- */
+      label { display: block; margin-top: 10px; font-weight: bold; }
+      input, textarea, select { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;}
+      #signature-pad { border: 2px dashed #ccc; margin-top: 5px; cursor: crosshair; touch-action: none; background: #fafafa; width: 100%; max-width: 460px;}
+      .btn-primary { margin-top: 15px; padding: 10px 15px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; width: 100%;}
+      .btn-clear { background-color: #ffc107; color: black; margin-top: 5px; width: auto;}
+
+      /* --- TABLE STYLES --- */
+      table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+      table, th, td { border: 1px solid #ddd; }
+      th, td { padding: 12px; text-align: left; }
+      th { background-color: #f2f2f2; }
+      .alert-box { padding: 15px; background-color: #e2e3e5; margin-bottom: 15px; border-radius: 4px;}
+
+      /* --- SECTIONS (Menyembunyikan konten) --- */
+      .view-section { display: none; padding: 20px; }
+      #loginSection { display: block; max-width: 400px;}
+    </style>
+  </head>
+  <body>
+
+    <div class="container" id="loginSection">
+      <h2 style="text-align:center;">Sistem Disposisi Surat [NAMA_INSTITUSI_ANDA]</h2>
+      <form onsubmit="event.preventDefault(); prosesLogin(event); return false;">
+        <label>Username:</label><input type="text" id="username" required>
+        <label>Password:</label><input type="password" id="password" required>
+        <button type="submit" class="btn-primary" id="loginBtn">Masuk</button>
+        <p id="pesanError" style="color:red; text-align:center; font-weight:bold;"></p>
+      </form>
+    </div>
+
+    <div class="container" style="padding: 0; background: transparent; box-shadow: none;">
+      <div class="navbar" id="mainNav">
+        <button class="nav-link" onclick="gantiMenu('dashboardView', this)" id="btnDash">Dashboard</button>
+        <button class="nav-link" onclick="gantiMenu('formView', this)">Input Disposisi</button>
+        <button class="nav-link" onclick="gantiMenu('terkirimView', this)">Surat Terkirim</button>
+        <button class="nav-link" onclick="gantiMenu('buatSuratView', this)">Buat Surat Tugas</button>
+        <button class="nav-link" onclick="gantiMenu('searchView', this)">Cari Surat</button>
+        <button class="nav-link right" onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <div class="container" id="appContent" style="display:none; border-radius: 0 0 8px 8px;">
+      
+      <div id="dashboardView" class="view-section">
+        <h2>Dashboard Saya</h2>
+        <div class="alert-box">
+          Selamat datang, <strong id="namaPetugasLabel" style="color:#0056b3;"></strong>! Berikut adalah surat yang didisposisikan kepada Anda.
+        </div>
+        <button onclick="muatDashboard()" style="padding:8px; margin-bottom:10px; cursor:pointer;">Segarkan Data 🔄</button>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Tanggal</th><th>No Surat</th><th>Pengirim</th><th>Perihal</th><th>Catatan</th><th>Aksi</th></tr></thead>
+            <tbody id="tabelSuratMasuk">
+              <tr><td colspan="6" style="text-align:center;">Memuat data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="formView" class="view-section">
+        <h2>Input Disposisi Baru</h2>
+        <form id="disposisiForm" onsubmit="submitForm(event)">
+          <label>Nomor Surat:</label><input type="text" id="noSurat" required>
+          <label>Pengirim:</label><input type="text" id="pengirim" required>
+          <label>Perihal:</label><input type="text" id="perihal" required>
+          <label>Disposisi Kepada:</label>
+            <select id="disposisiKe" required>
+            <option value="">-- Memuat daftar petugas... --</option>
+            </select>
+          <label>Catatan Disposisi:</label><textarea id="catatan" rows="3" required></textarea>
+          
+          <label>Upload File Surat (PDF/Gambar):</label>
+          <input type="file" id="fileSurat" accept=".pdf, image/*">
+          
+          <label>Tanda Tangan:</label>
+          <canvas id="signature-pad" height="150"></canvas>
+          <br><button type="button" class="btn-clear" onclick="clearPad()">Hapus Tanda Tangan</button>
+          
+          <button type="submit" class="btn-primary" id="submitBtn">Simpan Disposisi</button>
+        </form>
+      </div>
+
+      <div id="terkirimView" class="view-section">
+        <h2>Riwayat Surat Terkirim</h2>
+        <div class="alert-box">
+          Daftar surat disposisi yang pernah Anda buat dan kirimkan. Anda juga bisa memantau apakah surat sudah dibalas/dikomentari.
+        </div>
+        <button onclick="muatSuratTerkirim()" style="padding:8px; margin-bottom:10px; cursor:pointer;">Segarkan Data 🔄</button>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Tanggal</th><th>No Surat</th><th>Perihal</th><th>Dikirim Ke</th><th>Status / Balasan</th><th>File</th></tr></thead>
+            <tbody id="tabelSuratTerkirim">
+              <tr><td colspan="6" style="text-align:center;">Memuat data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="searchView" class="view-section">
+        <h2>Pencarian Surat</h2>
+        <div style="display: flex; gap: 10px;">
+          <input type="text" id="kataKunci" placeholder="Cari nomor surat, perihal, atau nama..." style="margin-top:0;">
+          <button onclick="jalankanPencarian()" class="btn-primary" style="margin-top:0; width:auto;">Cari</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="margin-top: 20px;">
+            <thead><tr><th>Tanggal</th><th>No Surat</th><th>Perihal</th><th>Disposisi Ke</th><th>File</th></tr></thead>
+            <tbody id="tabelPencarian">
+              <tr><td colspan="5" style="text-align:center;">Ketik kata kunci lalu klik Cari</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="buatSuratView" class="view-section">
+        <h2>Buat Surat Tugas Otomatis</h2>
+        <div class="alert-box">
+          Isi form di bawah ini, sistem akan otomatis membuatkan dokumen Surat Tugas.
+        </div>
+        <form id="formSuratTugas" onsubmit="submitSuratTugas(event)">
+          <label>Nomor Surat:</label>
+          <input type="text" id="st_nomor" placeholder="Contoh: 001/ST/KANTOR/202X" required>
+
+          <label>Nama Pegawai Ditugaskan:</label>
+          <input type="text" id="st_nama" required>
+          
+          <label>NIDN / NIP:</label>
+          <input type="text" id="st_nidn" required>
+          
+          <label>Jabatan:</label>
+          <input type="text" id="st_jabatan" required>
+          
+          <label>Tempat Tujuan:</label>
+          <input type="text" id="st_tujuan" required>
+          
+          <label>Hari:</label>
+          <input type="text" id="st_hari" placeholder="Contoh: Senin" required>
+          
+          <label>Tanggal:</label>
+          <input type="text" id="st_tanggal" placeholder="Contoh: 1 Januari 2024" required>
+          
+          <label>Maksud Perjalanan Dinas:</label>
+          <textarea id="st_maksud" rows="3" required></textarea>
+          
+          <button type="submit" class="btn-primary" id="btnBuatSurat">Buat Dokumen Surat Tugas</button>
+        </form>
+        
+        <div id="hasilSurat" style="margin-top: 20px; text-align: center; display: none;">
+          <h3 style="color: #28a745;">✅ Dokumen Berhasil Dibuat!</h3>
+          <a id="linkHasilSurat" href="#" target="_blank" style="padding: 10px 15px; background-color: #0056b3; color: white; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">Buka & Edit Dokumen</a>
+        </div>
+      </div>
+
+    </div>
+
+    <script>
+      var petugasAktif = "";
+      var levelAktif = "";
+
+      // --- LOGIKA SURAT TERKIRIM ---
+      function muatSuratTerkirim() {
+        var tbody = document.getElementById("tabelSuratTerkirim");
+        tbody.innerHTML = "<tr><td colspan='6' style='text-align:center;'>Sedang mengambil data...</td></tr>";
+
+        google.script.run
+        .withSuccessHandler(function(data) {
+          tbody.innerHTML = "";
+          if(data.length === 0) {
+            tbody.innerHTML = "<tr><td colspan='6' style='text-align:center;'>Anda belum pernah mengirim surat.</td></tr>";
+            return;
+          }
+          data.forEach(function(row) {
+            var tr = document.createElement("tr");
+
+            var linkFile = row.fileUrl !== "#" ? `<a href="${row.fileUrl}" target="_blank" style="font-weight:bold; color:#0056b3;">Buka</a>` : "-";
+            
+            // Logika menampilkan balasan
+            var teksBalasan = row.komentar ? `<span style="color:#28a745; font-weight:bold;">Telah Dibalas:</span> <br> <small>${row.komentar}</small>` : `<span style="color:#dc3545; font-style:italic;">Belum ada respon</span>`;
+
+            tr.innerHTML = `<td>${row.tanggal}</td><td>${row.noSurat}</td><td>${row.perihal}</td><td>${row.disposisiKe}</td><td>${teksBalasan}</td><td>${linkFile}</td>`;
+            tbody.appendChild(tr);
+          });
+        }).getSuratTerkirim(petugasAktif);
+      }
+
+      // --- LOGIKA MENU NAVIGASI ---
+      function gantiMenu(viewId, btnElement) {
+        // Sembunyikan semua section
+        var sections = document.getElementsByClassName("view-section");
+        for (var i = 0; i < sections.length; i++) {
+          sections[i].style.display = "none";
+        }
+        // Hapus class 'active' dari semua tombol
+        var links = document.getElementsByClassName("nav-link");
+        for (var i = 0; i < links.length; i++) {
+          links[i].classList.remove("active");
+        }
+        
+        // Tampilkan section yg dipilih & set tombol aktif
+        document.getElementById(viewId).style.display = "block";
+        if(btnElement) btnElement.classList.add("active");
+
+        // Jika buka dashboard, otomatis refresh data
+        if(viewId === 'dashboardView') muatDashboard();
+        if(viewId === 'terkirimView') muatSuratTerkirim();
+      }
+
+      // --- LOGIKA LOGIN ---
+      function prosesLogin(e) {
+        e.preventDefault();
+        var btn = document.getElementById("loginBtn");
+        btn.innerText = "Memeriksa..."; 
+        btn.disabled = true;
+        document.getElementById("pesanError").innerText = "";
+
+        var user = document.getElementById("username").value;
+        var pass = document.getElementById("password").value;
+
+        google.script.run
+        .withSuccessHandler(function(response) {
+          if (response.success) {
+            
+            petugasAktif = response.nama; 
+            levelAktif = response.level; 
+            
+            document.getElementById("namaPetugasLabel").innerText = petugasAktif;
+            document.getElementById("loginSection").style.display = "none";
+            document.getElementById("mainNav").style.display = "block";
+            document.getElementById("appContent").style.display = "block";
+            
+            // Masuk ke Dashboard secara default
+            gantiMenu('dashboardView', document.getElementById('btnDash')); 
+            muatDaftarPetugas();
+            
+          } else {
+            document.getElementById("pesanError").innerText = response.message;
+            btn.innerText = "Masuk"; 
+            btn.disabled = false;
+          }
+        })
+        .withFailureHandler(function(err){
+          document.getElementById("pesanError").innerText = "Error: " + err.message;
+          btn.innerText = "Masuk"; 
+          btn.disabled = false;
+        }).cekLogin(user, pass);
+      }
+
+      function logout() {
+        petugasAktif = "";
+        document.getElementById("loginSection").style.display = "block";
+        document.getElementById("mainNav").style.display = "none";
+        document.getElementById("appContent").style.display = "none";
+        document.getElementById("username").value = "";
+        document.getElementById("password").value = "";
+      }
+
+      // --- LOGIKA AMBIL DAFTAR PETUGAS UNTUK DROPDOWN ---
+      function muatDaftarPetugas() {
+        var selectElem = document.getElementById("disposisiKe");
+        
+        google.script.run
+        .withSuccessHandler(function(listNama) {
+          // Mengosongkan opsi dan menambahkan opsi default
+          selectElem.innerHTML = '<option value="">-- Pilih Petugas Penerima --</option>';
+          
+          // Memasukkan setiap nama sebagai pilihan opsi
+          listNama.forEach(function(nama) {
+            var opt = document.createElement('option');
+            opt.value = nama;
+            opt.innerHTML = nama;
+            selectElem.appendChild(opt);
+          });
+        })
+        .withFailureHandler(function(err) {
+          selectElem.innerHTML = '<option value="">Gagal memuat data!</option>';
+        }).getListPetugas();
+      }
+
+      // --- LOGIKA DASHBOARD (Tarik Data Surat Masuk) ---
+      function muatDashboard() {
+        var tbody = document.getElementById("tabelSuratMasuk");
+        tbody.innerHTML = "<tr><td colspan='6' style='text-align:center;'>Sedang mengambil data...</td></tr>";
+        
+        google.script.run
+        .withSuccessHandler(function(data) {
+          tbody.innerHTML = "";
+          if(data.length === 0) {
+            tbody.innerHTML = "<tr><td colspan='6' style='text-align:center;'>Belum ada surat disposisi untuk Anda.</td></tr>";
+            return;
+          }
+          data.forEach(function(row) {
+            var tr = document.createElement("tr");
+            
+            // Tombol Lihat Surat
+            var linkFile = row.fileUrl !== "#" ? `<a href="${row.fileUrl}" target="_blank" style="margin-right:8px; display:inline-block; margin-bottom:5px;">Lihat Surat</a>` : "-";
+            
+            // Tombol Beri Komentar
+            var btnKomentar = `<button onclick="isiKomentar(${row.row})" style="padding: 4px 8px; font-size: 12px; background-color: #ffc107; color: black; border: none; border-radius: 4px; cursor: pointer;">Komentari</button>`;
+            
+            // Menampilkan komentar di bawah catatan (jika sudah ada isinya)
+            var teksKomentar = row.komentarPenerima ? `<hr style="margin:5px 0; border:0; border-top:1px dashed #ccc;"><small style="color: #0056b3;"><b>Balasan Saya:</b> ${row.komentarPenerima}</small>` : "";
+
+            tr.innerHTML = `<td>${row.tanggal}</td><td>${row.noSurat}</td><td>${row.pengirim}</td><td>${row.perihal}</td><td>${row.catatan} ${teksKomentar}</td><td>${linkFile} <br> ${btnKomentar}</td>`;
+            tbody.appendChild(tr);
+          });
+        }).getSuratMasuk(petugasAktif);
+      }
+
+      // --- LOGIKA ISI KOMENTAR ---
+      function isiKomentar(rowNumber) {
+        var komentar = prompt("Masukkan komentar atau balasan Anda untuk disposisi ini:");
+        
+        // Jika user mengisi komentar dan klik OK
+        if (komentar !== null && komentar.trim() !== "") {
+          
+          // Memanggil fungsi backend untuk menyimpan
+          google.script.run
+          .withSuccessHandler(function(res){
+            alert(res);
+            muatDashboard(); // Segarkan tabel otomatis agar komentar langsung muncul
+          })
+          .withFailureHandler(function(err){
+            alert("Gagal menyimpan komentar: " + err.message);
+          })
+          .simpanKomentar(rowNumber, komentar);
+        }
+      }
+
+      // --- LOGIKA PENCARIAN ---
+      function jalankanPencarian() {
+        var keyword = document.getElementById("kataKunci").value;
+        var tbody = document.getElementById("tabelPencarian");
+        if(!keyword) { alert("Masukkan kata kunci pencarian!"); return; }
+
+        tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Mencari...</td></tr>";
+        google.script.run
+        .withSuccessHandler(function(data) {
+          tbody.innerHTML = "";
+          if(data.length === 0) {
+            tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Surat tidak ditemukan.</td></tr>";
+            return;
+          }
+          data.forEach(function(row) {
+            var tr = document.createElement("tr");
+            var linkFile = row.fileUrl !== "#" ? `<a href="${row.fileUrl}" target="_blank">Buka</a>` : "-";
+            tr.innerHTML = `<td>${row.tanggal}</td><td>${row.noSurat}</td><td>${row.perihal}</td><td>${row.disposisiKe}</td><td>${linkFile}</td>`;
+            tbody.appendChild(tr);
+          });
+        }).cariSurat(keyword);
+      }
+
+      // --- LOGIKA TANDA TANGAN (CANVAS) ---
+      var canvas = document.getElementById('signature-pad');
+      var ctx = canvas.getContext('2d');
+      var drawing = false;
+
+      // Agar ukuran canvas pas secara internal
+      canvas.width = canvas.offsetWidth || 460;
+
+      canvas.addEventListener('mousedown', function(e){ drawing=true; draw(e);});
+      canvas.addEventListener('mouseup', function(){ drawing=false; ctx.beginPath();});
+      canvas.addEventListener('mousemove', draw);
+      canvas.addEventListener('touchstart', function(e){ drawing=true; draw(e);});
+      canvas.addEventListener('touchend', function(){ drawing=false; ctx.beginPath();});
+      canvas.addEventListener('touchmove', draw);
+
+      function draw(e) {
+        if (!drawing) return;
+        e.preventDefault(); 
+        var rect = canvas.getBoundingClientRect();
+        var x = (e.clientX || e.touches[0].clientX) - rect.left;
+        var y = (e.clientY || e.touches[0].clientY) - rect.top;
+        ctx.lineWidth = 2; ctx.lineCap = 'round';
+        ctx.lineTo(x, y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, y);
+      }
+      function clearPad() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+
+      // --- LOGIKA SUBMIT FORM (UPLOAD & TTD) ---
+      function submitForm(e) {
+        e.preventDefault();
+        var blank = document.createElement('canvas');
+        blank.width = canvas.width; blank.height = canvas.height;
+        if (canvas.toDataURL() === blank.toDataURL()) { alert("Mohon isi tanda tangan!"); return; }
+
+        var btn = document.getElementById("submitBtn");
+        btn.innerText = "Menyimpan Data & File... (Bisa butuh 5-10 detik)"; btn.disabled = true;
+
+        var fileInput = document.getElementById('fileSurat');
+        var file = fileInput.files[0];
+
+        if (file) {
+          var reader = new FileReader();
+          reader.onload = function(event) { kirimKeBackend(event.target.result, file.name); };
+          reader.readAsDataURL(file);
+        } else {
+          kirimKeBackend("", ""); 
+        }
+      }
+
+      function kirimKeBackend(fileData, namaFile) {
+        var data = {
+          noSurat: document.getElementById("noSurat").value,
+          pengirim: document.getElementById("pengirim").value,
+          perihal: document.getElementById("perihal").value,
+          disposisiKe: document.getElementById("disposisiKe").value,
+          catatan: document.getElementById("catatan").value,
+          ttd: canvas.toDataURL(), petugas: petugasAktif,
+          fileSurat: fileData, namaFile: namaFile
+        };
+
+        google.script.run
+        .withSuccessHandler(function(res) {
+          alert(res);
+          document.getElementById("disposisiForm").reset(); clearPad();
+          var btn = document.getElementById("submitBtn");
+          btn.innerText = "Simpan Disposisi"; btn.disabled = false;
+          // Pindah ke dashboard otomatis setelah berhasil input
+          gantiMenu('dashboardView', document.getElementById('btnDash'));
+        })
+        .withFailureHandler(function(err) {
+          alert("Gagal menyimpan: " + err.message);
+          var btn = document.getElementById("submitBtn");
+          btn.innerText = "Simpan Disposisi"; btn.disabled = false;
+        }).simpanData(data);
+      }
+
+      // --- LOGIKA BUAT SURAT TUGAS ---
+      function submitSuratTugas(e) {
+        e.preventDefault();
+        var btn = document.getElementById("btnBuatSurat");
+        btn.innerText = "Sedang Merakit Dokumen... (Mohon tunggu)";
+        btn.disabled = true;
+        document.getElementById("hasilSurat").style.display = "none";
+
+        var dataSurat = {
+          nomor: document.getElementById("st_nomor").value,
+          nama: document.getElementById("st_nama").value,
+          nidn: document.getElementById("st_nidn").value,
+          jabatan: document.getElementById("st_jabatan").value,
+          tujuan: document.getElementById("st_tujuan").value,
+          hari: document.getElementById("st_hari").value,
+          tanggal: document.getElementById("st_tanggal").value,
+          maksud: document.getElementById("st_maksud").value,
+          level: levelAktif,    // Mengirim level user ke backend
+          pembuat: petugasAktif // Mengirim nama staf ke backend
+        };
+
+        google.script.run
+        .withSuccessHandler(function(response) {
+          btn.innerText = "Buat Dokumen Surat Tugas";
+          btn.disabled = false;
+          
+          if (response.success) {
+            document.getElementById("formSuratTugas").reset();
+            document.getElementById("hasilSurat").style.display = "block";
+            
+            // CEK APAKAH ADMIN ATAU BUKAN UNTUK TAMPILANNYA
+            if (response.isAdmin) {
+              document.getElementById("hasilSurat").innerHTML = `
+                <h3 style="color: #28a745;">✅ Dokumen Berhasil Dibuat!</h3>
+                <a href="${response.url}" target="_blank" style="padding: 10px 15px; background-color: #0056b3; color: white; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: bold;">Cetak / Edit Dokumen</a>
+              `;
+            } else {
+               document.getElementById("hasilSurat").innerHTML = `
+                <h3 style="color: #17a2b8;">✅ Draft Terkirim ke Admin</h3>
+                <p style="font-weight: bold; color: #333;">${response.message}</p>
+              `;
+            }
+          } else {
+            alert("Gagal membuat surat: " + response.message);
+          }
+        })
+        .withFailureHandler(function(err){
+          alert("Error server: " + err.message);
+          btn.innerText = "Buat Dokumen Surat Tugas";
+          btn.disabled = false;
+        })
+        .generateSuratTugas(dataSurat); 
+      } 
+    </script>
+  </body>
+</html>
